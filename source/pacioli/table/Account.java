@@ -7,7 +7,7 @@ import pacioli.db.*;
 * Account Type is one of: Asset, Liability, Equity, Revenue, Expense, Other Revenue, Other Expense
 * It must begin with a capital letter
 *
-* Account number is just another identifier, and it can be zero.  You can use it to assign 3 or 4 different account numbers
+* Account number is just another identifier, and it can be zero.  You can use it to assign 3 or 4 digit account numbers
 *
 * Special is a special type of account. There should be only one account with each special tag.
 */

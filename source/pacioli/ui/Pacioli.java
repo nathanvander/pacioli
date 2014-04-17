@@ -136,7 +136,7 @@ public class Pacioli extends Frame implements Display {
 	}
 
 	public void setStatus2(String t) {
-		status.setText(t);
+		status2.setText(t);
 	}
 
 	public String getClientID() {

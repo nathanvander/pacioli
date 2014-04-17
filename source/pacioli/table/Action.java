@@ -25,8 +25,8 @@ import java.awt.Choice;
 *		VMail_Recvd = a voicemail message received
 *		VMail_Sent = a voicemail message left
 *
-*	Amount is stored as a double, which is stored as a REAL (8-byte floating point number) in the database.  Make sure to round
-*   this before and after multiplying it.
+*	Amount is stored as a double, which is stored as a REAL (8-byte floating point number) in the database.  Make sure
+*   to round this before and after multiplying it.
 *
 *	Date is stored as YYYY-MM-DD
 */
