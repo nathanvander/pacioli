@@ -17,8 +17,8 @@ public interface Conn {
 	public void createTable(String className) throws DSX;
 
 	/**
-	*  Insert an object into the datastore and return the key.  This will automatically create the table if needed.
-	* Keys are generated automatically, and will be the first row in the database.
+	*  Insert an object into the datastore and return the key.
+	* Keys are generated automatically, and will be the first column in the table.
 	*/
 	public String insert(Object o) throws DSX;
 
