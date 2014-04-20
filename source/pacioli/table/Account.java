@@ -5,60 +5,29 @@ import pacioli.db.*;
 
 /**
 * Account Type is one of: Asset, Liability, Equity, Revenue, Expense, Other Revenue, Other Expense
-* It must begin with a capital letter
 *
-* Account number is just another identifier, and it can be zero.  You can use it to assign 3 or 4 digit account numbers
+* Account number is just another identifier, and it can be blank.  You can use it to assign 3 or 4 digit account numbers
 *
 * Special is a special type of account. There should be only one account with each special tag.
+*
+* Because each accounting transaction only has 2 accounts, and because the number is recorded only once, it is impossible
+* for this to ever go out of balance.
 */
 
 public class Account {
 	public int number;
 	public String name;
-	public String type;
-	public boolean debit=true;		//does this normally have a debit balance?
+	public int type;
 	public int special;
-	public String desc;
+	public String desc;				//description
 	public boolean deleted=false;  	//should usually be false.  For integrity sake, don't actually allow a delete
-
-	class Special {
-		//tag special accounts
-		//Note: This looks like a partial chart of accounts, but the numbering is just to make it more logical
-		//most accounts do not need a tag and should be 0
-		public final static int DEFAULT=0;
-		public final static int CASH=10;			//cash and undeposited checks
-		public final static int OPERATING_CHECKING=11;
-		public final static int TRUST_CHECKING=12;
-		public final static int RECEIVABLES=15;		//accounts receivable
-		public final static int BILLABLE_TIME=18;	//asset
-		public final static int BILLABLE_COST=19;
-		public final static int TRUST_LIABILITY=20;
-		public final static int PAYABLES=21;
-		public final static int SALES=40;
-		public final static int POTENTIAL_REVENUE=41;	//for time that hasn't been billed yet
-		public final static int LOST_REVENUE=42;		//for written off time
-		public final static int UNBILLABLE_TIME=50;
-	}
 
 	public Account() {}
 
-	public Account(String type,String name,int special) {
+	public Account(int type,String name,int special) {
 		this.type=type;
 		this.name=name;
 		this.special=special;
-	}
-
-	//get possible types
-	public static Choice getTypes() {
-		Choice list = new Choice();
-		list.add("Asset");
-		list.add("Liability");
-		list.add("Equity");
-		list.add("Revenue");
-		list.add("Expense");
-		list.add("Other Revenue");
-		list.add("Other Expense");
-		return list;
 	}
 
 	//common accounts
@@ -99,39 +68,39 @@ public class Account {
 		int count=rs.getInt(0);
 		if (count==0) {
 			//only add if table is empty
-			Account a=new Account("Asset","Cash",Special.CASH);
+			Account a=new Account(AccountType.Asset.ordinal(),"Cash",Special.CASH.code());
 			db.insert(a);
-			a=new Account("Asset","Operating Account",Special.OPERATING_CHECKING);
+			a=new Account(AccountType.Asset.ordinal(),"Operating Account",Special.OPERATING_CHECKING.code());
 			db.insert(a);
-			a=new Account("Asset","Trust Account",Special.TRUST_CHECKING);
+			a=new Account(AccountType.Asset.ordinal(),"Trust Account",Special.TRUST_CHECKING.code());
 			db.insert(a);
-			a=new Account("Asset","Receivables",Special.RECEIVABLES);
+			a=new Account(AccountType.Asset.ordinal(),"Receivables",Special.RECEIVABLES.code());
 			db.insert(a);
-			a=new Account("Asset","Billable Time",Special.BILLABLE_TIME);
+			a=new Account(AccountType.Asset.ordinal(),"Billable Time",Special.BILLABLE_TIME.code());
 			db.insert(a);
-			a=new Account("Asset","Billable Cost",Special.BILLABLE_COST);
+			a=new Account(AccountType.Asset.ordinal(),"Billable Cost",Special.BILLABLE_COST.code());
 			db.insert(a);
-			a=new Account("Liability","Payables",Special.PAYABLES);
+			a=new Account(AccountType.Liability.ordinal(),"Payables",Special.PAYABLES.code());
 			db.insert(a);
-			a=new Account("Liability","Trust Liability",Special.TRUST_LIABILITY);
+			a=new Account(AccountType.Liability.ordinal(),"Trust Liability",Special.TRUST_LIABILITY.code());
 			db.insert(a);
-			a=new Account("Equity","Capital",0);
+			a=new Account(AccountType.Equity.ordinal(),"Capital",0);
 			db.insert(a);
-			a=new Account("Equity","Drawing",0);
+			a=new Account(AccountType.Equity.ordinal(),"Drawing",0);
 			db.insert(a);
-			a=new Account("Equity","Retained Earnings",0);
+			a=new Account(AccountType.Equity.ordinal(),"Retained Earnings",0);
 			db.insert(a);
-			a=new Account("Revenue","Sales",Special.SALES);
+			a=new Account(AccountType.Revenue.ordinal(),"Sales",Special.SALES.code());
 			db.insert(a);
-			a=new Account("Revenue","Refund",0);					//debit balance
+			a=new Account(AccountType.Revenue.ordinal(),"Refund",0);
 			db.insert(a);
-			a=new Account("Expense","Operating Expense",0);
+			a=new Account(AccountType.Expense.ordinal(),"Operating Expense",0);
 			db.insert(a);
-			a=new Account("Other Revenue","Potential Revenue",Special.POTENTIAL_REVENUE);
+			a=new Account(AccountType.OtherRevenue.ordinal(),"Potential Revenue",Special.POTENTIAL_REVENUE.code());
 			db.insert(a);
-			a=new Account("Other Revenue","Lost Revenue",Special.LOST_REVENUE);
+			a=new Account(AccountType.OtherRevenue.ordinal(),"Lost Revenue",Special.LOST_REVENUE.code());
 			db.insert(a);
-			a=new Account("Other Expense","Unbillable Time",Special.UNBILLABLE_TIME);
+			a=new Account(AccountType.OtherExpense.ordinal(),"Unbillable Time",Special.UNBILLABLE_TIME.code());
 			db.insert(a);
 		}
 		//dont close connection, it was passed in

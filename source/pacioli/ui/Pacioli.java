@@ -78,9 +78,9 @@ public class Pacioli extends Frame implements Display {
 		client.init(this,this);
 		menuBar.add(client);
 
-		//AccountModule account=new AccountModule();
-		//account.init(this,this);
-		//menuBar.add(account);
+		AccountModule account=new AccountModule();
+		account.init(this,this);
+		menuBar.add(account);
 
 		//ActivityModule act = new ActivityModule();
 		//act.init(this);
