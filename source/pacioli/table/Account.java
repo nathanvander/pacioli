@@ -59,13 +59,7 @@ public class Account {
 	public static void addAccounts(Conn db) throws DSX {
 
 		//first see if they are in the database
-		String sql="SELECT count() FROM pacioli_table_Account";
-		Row rs=db.query(sql);
-		//this should always return something, even if it is 0
-		if (!rs.next()) {
-			throw new DSX(ErrorCode.PACIOLI_DB_SELECT,"unexpected result from SELECT count()");
-		}
-		int count=rs.getInt(0);
+		int count=db.count("pacioli.table.Account");
 		if (count==0) {
 			//only add if table is empty
 			Account a=new Account(AccountType.Asset.ordinal(),"Cash",Special.CASH.code());

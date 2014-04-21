@@ -17,8 +17,8 @@ public interface Conn {
 	public void createTable(String className) throws DSX;
 
 	/**
-	*  Insert an object into the datastore and return the key.
-	* Keys are generated automatically, and will be the first column in the table.
+	*  Insert an object into the datastore and return the key.  This will automatically create the table if needed.
+	* Keys are generated automatically, and will be the first row in the database.
 	*/
 	public String insert(Object o) throws DSX;
 
@@ -32,6 +32,9 @@ public interface Conn {
 	public Row selectAll(String className,String[] sortfields) throws DSX;
 
 	public Row query(String sql) throws DSX;
+
+	//return the number of objects in the given table
+	public int count(String className) throws DSX;
 
 	public void exec(String sql) throws DSX;
 

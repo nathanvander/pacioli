@@ -40,7 +40,11 @@ public class ListAccounts implements Report {
 			while (r.next()) {
 				Account a=(Account)r.getRow();
 				String type=AccountType.lookupName(a.type);
-				sb.append("<tr><td>"+r.key()+"</td><td>"+type+"</td><td>"+a.number+"</td><td>"+a.name+"</td><td>"+a.desc+"</td></tr>");
+				String number=String.valueOf(a.number);
+				if (a.number==0) {
+					number="";
+				}
+				sb.append("<tr><td>"+r.key()+"</td><td>"+type+"</td><td>"+number+"</td><td>"+a.name+"</td><td>"+a.desc+"</td></tr>");
 			}
 			sb.append("</table>");
 			cx.close();

@@ -1,11 +1,14 @@
-package pacioli.db;
+package pacioli.h2db;
 import pacioli.util.ClassTableName;
+import pacioli.db.DSX;
+import pacioli.db.Conn;
+import pacioli.db.Row;
 import java.util.Date;
 import java.lang.reflect.Field;
-import com.almworks.sqlite4java.*;
+import java.sql.*;
 
 /**
-* LiteDBConnection is a wrapper around SQLiteConnection, using the following principles:
+* H2Connection is a wrapper around java.sql.Connection, using the following principles:
 *  1. each object in its own table
 *  2. a commmon key for objects
 *
@@ -13,13 +16,13 @@ import com.almworks.sqlite4java.*;
 *
 */
 
-public class LiteDBConnection implements Conn {
-	SQLiteConnection conn;
+public class H2Connection implements Conn {
+	Connection conn;
 	Counter counter;
 	int connId;		//used for debugging
 
-	public LiteDBConnection(SQLiteConnection conn,Counter counter,int connId) {
-		this.conn=conn;
+	public H2Connection(Connection cx,Counter counter,int connId) {
+		this.conn=cx;
 		this.counter=counter;
 		this.connId=connId;
 	}
@@ -44,12 +47,15 @@ public class LiteDBConnection implements Conn {
 	}
 
 	//put key as the first field
+	//maps the following:
+	//	String to VARCHAR
+	//	boolean to BOOLEAN (not INT)
 	private void createTable(String tableName,Class k) throws DSX {
 		StringBuffer sql=new StringBuffer();
 		sql.append("CREATE TABLE IF NOT EXISTS "+tableName+" (\n");
 
 		//append key
-		sql.append("key TEXT NOT NULL UNIQUE"+"\n");
+		sql.append("key VARCHAR PRIMARY KEY NOT NULL"+"\n");
 		sql.append(",");
 
 		Field[] fields=k.getFields();
@@ -60,52 +66,56 @@ public class LiteDBConnection implements Conn {
 			String ft=f.getType().getName();
 
 			if (ft.equals("java.lang.String")) {
-				sql.append(fieldName+" TEXT"+"\n");
+				sql.append(fieldName+" VARCHAR"+"\n");
 			} else if (ft.equals("java.util.Date")) {
-				sql.append(fieldName+" TEXT"+"\n");
+				sql.append(fieldName+" VARCHAR"+"\n");
 			} else if (ft.equals("int")) {
-				sql.append(fieldName+" INTEGER"+"\n");
+				sql.append(fieldName+" INT"+"\n");
 			} else if (ft.equals("long")) {
-				sql.append(fieldName+" INTEGER"+"\n");
+				sql.append(fieldName+" BIGINT"+"\n");
 			} else if (ft.equals("char")) {
-				sql.append(fieldName+" INTEGER"+"\n");
+				sql.append(fieldName+" INT"+"\n");
 			} else if (ft.equals("boolean")) {
-				//sql.append(fieldName+" TEXT"+"\n");
-				sql.append(fieldName+" INTEGER"+"\n");   //this will be 1 or 0
+				sql.append(fieldName+" BOOLEAN"+"\n");   //this will be 1 or 0
 			} else if (ft.equals("float")) {
 				sql.append(fieldName+" REAL"+"\n");
 			} else if (ft.equals("double")) {
-				sql.append(fieldName+" REAL"+"\n");
+				sql.append(fieldName+" DOUBLE"+"\n");
 			} else if (ft.equals("[C")) {  //char array
-				sql.append(fieldName+" TEXT"+"\n");
+				sql.append(fieldName+" VARCHAR"+"\n");
 			} else if (ft.equals("[B")) {  //byte array
 				sql.append(fieldName+" BLOB"+"\n");  //needs more work
 			} else if (ft.equals("java.math.BigDecimal")) {
+				//same as DECIMAL in H2
 				sql.append(fieldName+" NUMERIC"+"\n");
 			}
 		}
 		sql.append(")"+"\n");
 		System.out.println(sql);
 		try {
-			conn.exec(sql.toString());
-		} catch (SQLiteException x) {
+			Statement stmt=conn.createStatement();
+			stmt.execute(sql.toString());
+			stmt.close();
+		} catch (SQLException x) {
 			throw new DSX(x.getErrorCode(),x.getMessage());
 		}
 	}
 
 	private boolean tableExists(String tableName) throws DSX {
-		String sql="SELECT name FROM sqlite_master WHERE type = 'table' AND name = '"+tableName+"'";
+		//String sql="SELECT name FROM sqlite_master WHERE type = 'table' AND name = '"+tableName+"'";
+		//table names in H2 might be uppercase automatically, not sure
+		String sql="SELECT COUNT(*) AS count FROM information_schema.tables WHERE upper(table_name) = '"+tableName.toUpperCase()+"'";
 		System.out.println(sql);
-		SQLiteStatement stmt=null;
+		Statement stmt=null;
 		try {
-			stmt = conn.prepare(sql);
-			return stmt.step();
-		} catch (SQLiteException x) {
+			stmt=conn.createStatement();
+			ResultSet rs=stmt.executeQuery(sql);
+			rs.next();
+			int count=rs.getInt(1);
+			stmt.close();
+			return (count==1);
+		} catch (SQLException x) {
 			throw new DSX(x.getErrorCode(),x.getMessage());
-		} finally {
-			if (stmt!=null) {
-				stmt.dispose();
-			}
 		}
 	}
 
@@ -176,9 +186,11 @@ public class LiteDBConnection implements Conn {
 		}
 		sql.append(")"+"\n");
 		System.out.println(sql);
-		conn.exec(sql.toString());
+		Statement st=conn.createStatement();
+		st.executeUpdate(sql.toString());
+		st.close();
 		return key;
-		} catch (SQLiteException x) {
+		} catch (SQLException x) {
 			throw new DSX(x.getErrorCode(),x.getMessage());
 		} catch (IllegalAccessException x2) {
 			throw new DSX(ErrorCode.JAVA_LANG_ILLEGALACCESS,x2.getMessage());
@@ -212,66 +224,61 @@ public class LiteDBConnection implements Conn {
 	//className here is the unflattened name, i.e. dots instead of underscores
 	//returns null if not found
 	public Object get(String key,String className) throws DSX {
-		SQLiteStatement stmt=null;
+		Statement stmt=null;
 		try{
 			Class k=Class.forName(className);
 			String flattened=ClassTableName.flattenedTableName(className);
 			String sql="SELECT * FROM "+flattened+" WHERE key='"+key+"'";
 			System.out.println(sql);
-			stmt = conn.prepare(sql);
-			if (stmt.step()) {
-				Object o=extractObject(stmt,k);
+			stmt = conn.createStatement();
+			ResultSet rs=stmt.executeQuery(sql);
+			if (rs.next()) {
+				Object o=extractObject(rs,k);
+				rs.close();
+				stmt.close();
 				return o;
 			} else {
 				throw new DSX(ErrorCode.PACIOLI_DB_GET,"requested record at key "+key+" does not exist");
 			}
-		} catch (SQLiteException x) {
+		} catch (SQLException x) {
 			throw new DSX(x.getErrorCode(),x.getMessage());
 		} catch (ClassNotFoundException x2) {
 			throw new DSX(ErrorCode.JAVA_LANG_CLASSNOTFOUND," class "+className+" not found, "+x2.getMessage());
-		} finally {
-			if (stmt!=null) {
-				stmt.dispose();
-			}
 		}
 	}
 
 	//key is in the table but not in the object
-	public static Object extractObject(SQLiteStatement st,Class c) throws DSX {
+	public static Object extractObject(ResultSet rs,Class c) throws DSX {
 	 	try {
 			Object o=c.newInstance();
-			for (int i=0;i<st.columnCount();i++) {
-				String colName=st.getColumnName(i);
-				if (colName.equals("key")) {continue;}
-				if (st.columnNull(i)) {continue;}
+			ResultSetMetaData meta=rs.getMetaData();
+			for (int i=1;i<meta.getColumnCount()+1;i++) {
+				String colName=meta.getColumnName(i);	//this might be upper case
+				colName=colName.toLowerCase();
+				if (colName.equalsIgnoreCase("key")) {continue;}  //the object doesn't have the key in it
+				if (rs.getObject(i)==null) {continue;}
 
 			 	Field f=c.getField(colName);
 			 	String ft=f.getType().getName();
-			 	String value=st.columnString(i);
+			 	String value=rs.getString(i);
 				if (ft.equals("java.lang.String")) {
 					f.set(o,value);
 				} else if (ft.equals("java.util.Date")) {
 					f.set(o,new java.util.Date(value));
 				} else if (ft.equals("int")) {
-					f.setInt(o,st.columnInt(i));
+					f.setInt(o,rs.getInt(i));
 				} else if (ft.equals("long")) {
-					f.setLong(o,st.columnLong(i));
+					f.setLong(o,rs.getLong(i));
 				} else if (ft.equals("char")) {
 					char cv=value.charAt(0);
 					f.setChar(o,cv);
 				} else if (ft.equals("boolean")) {
-					//boolean bv=Boolean.parseBoolean(value);
-					//f.setBoolean(o,bv);
-					int ib=st.columnInt(i);
-					if (ib==1) {
-						f.setBoolean(o,true);
-					} else {
-						f.setBoolean(o,false);
-					}
+					boolean bz=rs.getBoolean(i);
+					f.setBoolean(o,bz);
 				} else if (ft.equals("float")) {
-					f.setFloat(o,(float)st.columnDouble(i));
+					f.setFloat(o,rs.getFloat(i));
 				} else if (ft.equals("double")) {
-					f.setDouble(o,st.columnDouble(i));
+					f.setDouble(o,rs.getDouble(i));
 				} else if (ft.equals("[C")) {
 					char[] ca=value.toCharArray();
 					f.set(o,value);
@@ -285,7 +292,7 @@ public class LiteDBConnection implements Conn {
 			throw new DSX(ErrorCode.JAVA_LANG_NULLPOINTER,x.getMessage());
 		} catch (InstantiationException x) {
 			throw new DSX(ErrorCode.JAVA_LANG_INSTANTIATION,x.getMessage());
-		} catch (SQLiteException x) {
+		} catch (SQLException x) {
 			throw new DSX(x.getErrorCode(),x.getMessage());
 		} catch (IllegalAccessException x) {
 			throw new DSX(ErrorCode.JAVA_LANG_ILLEGALACCESS,x.getMessage());
@@ -340,9 +347,9 @@ public class LiteDBConnection implements Conn {
 				sql.append(fn+"='"+cv+"'\n");
 			} else if (ft.equals("boolean")) {
 				boolean bv=f.getBoolean(o);
-				//sql.append(fn+"='"+bv+"'\n");
-				if (bv) { sql.append(fn+"=1\n");}
-				else {sql.append(fn+"=0\n");}
+				sql.append(fn+"='"+bv+"'\n");
+				//if (bv) { sql.append(fn+"=1\n");}
+				//else {sql.append(fn+"=0\n");}
 			} else if (ft.equals("float")) {
 				float flv=f.getFloat(o);
 				sql.append(fn+"="+flv+"\n");
@@ -362,10 +369,10 @@ public class LiteDBConnection implements Conn {
 		//add the where clause
 		sql.append("WHERE key='"+key+"'"+"\n");
 		System.out.println(sql);
-			conn.exec(sql.toString());
-			int i=changes();
+			Statement st=conn.createStatement();
+			int i=st.executeUpdate(sql.toString());
 			if (i==0) {throw new DSX(ErrorCode.PACIOLI_DB_UPDATE_FAILED,"no rows changed");}
-		} catch (SQLiteException x) {
+		} catch (SQLException x) {
 			throw new DSX(x.getErrorCode(),x.getMessage());
 		} catch (IllegalAccessException x2) {
 			throw new DSX(ErrorCode.JAVA_LANG_ILLEGALACCESS,x2.getMessage());
@@ -381,26 +388,10 @@ public class LiteDBConnection implements Conn {
 		String sql="DELETE FROM "+table+" WHERE key='"+key+"'";
 		System.out.println(sql);
 		try {
-			conn.exec(sql);
-			int i=changes();
+			Statement st=conn.createStatement();
+			int i=st.executeUpdate(sql.toString());
 			if (i==0) {throw new DSX(ErrorCode.PACIOLI_DB_DELETE_FAILED,"no rows changed");}
-		} catch (SQLiteException x) {
-			throw new DSX(x.getErrorCode(),x.getMessage());
-		}
-	}
-
-	//get the number of changes
-	private int changes() throws DSX {
-		String sql="SELECT changes()";
-		System.out.println(sql);
-		try {
-			SQLiteStatement stmt = conn.prepare(sql);
-			stmt.step();
-			int i=stmt.columnInt(0);
-			stmt.dispose();
-			return i;
-		} catch (SQLiteException x) {
-			x.getStackTrace();
+		} catch (SQLException x) {
 			throw new DSX(x.getErrorCode(),x.getMessage());
 		}
 	}
@@ -415,9 +406,10 @@ public class LiteDBConnection implements Conn {
 		String table=ClassTableName.flattenedTableName(className);
 		String sql="SELECT * FROM "+table+" ORDER BY "+fieldNames(sortfields);
 		System.out.println(sql);
-			SQLiteStatement stmt = conn.prepare(sql);
-			return new LiteRow(stmt);
-		} catch (SQLiteException x) {
+			Statement st=conn.createStatement();
+			ResultSet rs=st.executeQuery(sql);
+			return new H2Row(rs);
+		} catch (SQLException x) {
 			throw new DSX(x.getErrorCode(),x.getMessage());
 		} catch (ClassNotFoundException x2) {
 			throw new DSX(ErrorCode.JAVA_LANG_CLASSNOTFOUND,className+" "+x2.getMessage());
@@ -431,17 +423,20 @@ public class LiteDBConnection implements Conn {
 	//for custom queries
 	public Row query(String sql) throws DSX {
 		try {
-			SQLiteStatement stmt = conn.prepare(sql);
-			return new LiteRow(stmt);
-		} catch (SQLiteException x) {
+			Statement st=conn.createStatement();
+			ResultSet rs=st.executeQuery(sql);
+			return new H2Row(rs);
+		} catch (SQLException x) {
 			throw new DSX(x.getErrorCode(),x.getMessage());
 		}
 	}
 
+	//there really is a difference between execute() and executeUpdate().  Assume that executeUpdate is wanted
 	public void exec(String sql) throws DSX {
 		try {
-			conn.exec(sql);
-		} catch (SQLiteException x) {
+			Statement st=conn.createStatement();
+			st.executeUpdate(sql);
+		} catch (SQLException x) {
 			throw new DSX(x.getErrorCode(),x.getMessage());
 		}
 	}
@@ -452,19 +447,26 @@ public class LiteDBConnection implements Conn {
 		String tableName=ClassTableName.flattenedTableName(className);
 		String sql="SELECT count(*) FROM "+tableName;
 		System.out.println(sql);
-		SQLiteStatement stmt = conn.prepare(sql);
-		stmt.step();
-		int i=stmt.columnInt(0);
-		stmt.dispose();
+		Statement st=conn.createStatement();
+		ResultSet rs=st.executeQuery(sql);
+		rs.next();
+		int i=rs.getInt(1);
+		st.close();
 		return i;
-		} catch (SQLiteException x) {
+		} catch (SQLException x) {
 			throw new DSX(x.getErrorCode(),x.getMessage());
 		}
 	}
 
 	//you can't use this after it is closed
+	//don't propagate exception
 	public void close() {
-		conn.dispose();
-		System.out.println("closing connection #"+connId);
+		try {
+			conn.close();
+			System.out.println("closing connection #"+connId);
+		} catch (SQLException x) {
+			System.out.println(x.getErrorCode()+" error closing connection");
+		}
+
 	}
 }
